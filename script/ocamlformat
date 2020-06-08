@@ -1,0 +1,39 @@
+enable_outside_detected_project=""
+root=""
+next_is_root=false
+
+ARGS="$@"
+
+for i in "$@"
+do
+  case $i in
+    --enable-outside-detected-project)
+      enable_outside_detected_project=$i
+      shift
+      ;;
+    --root=*)
+      root=$i
+      shift
+      ;;
+    --root)
+      next_is_root=true
+      shift
+      ;;
+    *)
+      if [ "$next_is_false" = true ]
+      then
+        root="--root=$i"
+        next_is_root=false
+      fi
+      shift
+      ;;
+  esac
+done
+
+EXE=`ocamlformat_repo auto $enable_outside_detected_project $root | grep .ocamlformat-repo`
+
+if [ -n "EXE" ]; then
+  $EXE $ARGS
+else
+  ocamlformat $ARGS
+fi
