@@ -151,3 +151,92 @@ let install version =
       let sw = "ocamlformat-repo." ^ ocaml_version in
       let exe = Fpath.(opam_dir / sw / "bin" / "ocamlformat") in
       copy exe Fpath.(bin_dir / vname))
+
+let project_root_witness = [ ".git"; ".hg"; "dune-project" ]
+
+module Fpath = struct
+  include Fpath
+
+  let cwd () = Unix.getcwd () |> v
+
+  let exists p = to_string p |> Sys.file_exists
+
+  let to_absolute file = if is_rel file then append (cwd ()) file else file
+
+  let to_string ?(relativize = false) p =
+    if relativize then
+      match Fpath.relativize ~root:(cwd ()) p with
+      | Some p -> to_string p
+      | None -> to_string p
+    else to_string p
+
+  let _pp fmt p = Format.fprintf fmt "%s" (to_string ~relativize:true p)
+end
+
+let is_project_root ~root dir =
+  match root with
+  | Some root -> Fpath.equal dir root
+  | None ->
+      List.exists (fun name -> Fpath.(exists (dir / name))) project_root_witness
+
+let rec collect_files ~enable_outside_detected_project ~root ~segs ~files =
+  match segs with
+  | [] | [ "" ] -> (files, None)
+  | "" :: upper_segs ->
+      collect_files ~enable_outside_detected_project ~root ~segs:upper_segs
+        ~files
+  | _ :: upper_segs ->
+      let dir = String.concat "/" (List.rev segs) |> Fpath.v in
+      let files =
+        let f_1 = Fpath.(dir / ".ocamlformat") in
+        if Fpath.exists f_1 then f_1 :: files else files
+      in
+      if is_project_root ~root dir && not enable_outside_detected_project then
+        (files, Some dir)
+      else
+        collect_files ~enable_outside_detected_project ~root ~segs:upper_segs
+          ~files
+
+let strip_comment s =
+  match String.index_opt s '#' with Some i -> String.sub s 0 i | None -> s
+
+let read_version path =
+  match
+    Bos.OS.File.fold_lines
+      (fun acc line ->
+        match acc with
+        | Some acc -> Some acc
+        | None -> (
+            let line = strip_comment line in
+            match Astring.String.cut ~sep:"=" line with
+            | Some (name, value) ->
+                let name = String.trim name in
+                let value = String.trim value in
+                if String.equal name "version" then Some value else None
+            | None -> None ))
+      None path
+  with
+  | Ok v -> v
+  | Error _ -> None
+
+let auto ~enable_outside_detected_project ~root =
+  let root =
+    Option.map Fpath.(fun x -> to_absolute x |> normalize) root
+  in
+  let dir = Fpath.(v "-" |> to_absolute |> normalize |> split_base) |> fst in
+  let segs = Fpath.segs dir |> List.rev in
+  let files, _ =
+    collect_files ~enable_outside_detected_project ~root ~segs ~files:[]
+  in
+  let version =
+    List.fold_left
+      (fun acc file ->
+        match acc with Some v -> Some v | None -> read_version file)
+      None files
+  in
+  match version with
+  | Some v -> (
+      match get v with
+      | Some v -> Some v
+      | None -> ( match install v with Ok () -> get v | Error _ -> None ) )
+  | None -> None
