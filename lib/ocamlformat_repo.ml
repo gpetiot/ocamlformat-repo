@@ -11,13 +11,7 @@ let bin_dir () =
   let fpath = Fpath.(repo_dir / "bin") in
   Dir.create fpath >>| fun (_ : bool) -> fpath
 
-let switch_dir () =
-  match Bos.OS.Env.var "OPAM_SWITCH_PREFIX" with
-  | Some v ->
-      R.reword_error
-        (fun _ -> R.msg "Could not detect opam root directory.")
-        (Fpath.of_string v)
-  | None -> R.error_msg "Could not detect opam root directory."
+let opam_dir () = Dir.user () >>| fun user_dir -> Fpath.(user_dir / ".opam")
 
 let list () =
   bin_dir () >>= fun bin_dir ->
@@ -153,5 +147,7 @@ let install version =
   Logs.info (fun m -> m "Require ocaml compiler %s" ocaml_version);
   on_switch ocaml_version ~f:(fun () ->
       install_pkg version >>= fun () ->
-      switch_dir () >>= fun switch_dir ->
-      copy Fpath.(switch_dir / "bin" / "ocamlformat") Fpath.(bin_dir / vname))
+      opam_dir () >>= fun opam_dir ->
+      let sw = "ocamlformat-repo." ^ ocaml_version in
+      let exe = Fpath.(opam_dir / sw / "bin" / "ocamlformat") in
+      copy exe Fpath.(bin_dir / vname))
