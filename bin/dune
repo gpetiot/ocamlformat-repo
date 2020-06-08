@@ -1,0 +1,4 @@
+(executable
+ (name main)
+ (public_name ocamlformat_repo)
+ (libraries cmdliner ocamlformat_repo))

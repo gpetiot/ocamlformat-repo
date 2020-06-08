@@ -1,0 +1,3 @@
+(library
+ (name ocamlformat_repo)
+ (libraries bos ocaml-version opam-state))
