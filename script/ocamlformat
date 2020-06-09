@@ -20,7 +20,7 @@ do
       shift
       ;;
     *)
-      if [ "$next_is_false" = true ]
+      if [ "$next_is_root" = true ]
       then
         root="--root=$i"
         next_is_root=false
